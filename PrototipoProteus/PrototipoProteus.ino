@@ -26,7 +26,7 @@ void setup() {
 
   pinMode(MOTION_SENSOR_PIN, INPUT);
   pinMode(TEMP_SENSOR_PIN, INPUT);
-
+ 
   digitalWrite(FAN_1_PIN, LOW);
   digitalWrite(FAN_2_PIN, LOW);  
 
