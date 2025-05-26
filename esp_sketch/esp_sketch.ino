@@ -1,39 +1,51 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
 
-#define SSID "Jack"
-#define PASSWORD "10705470"
-#define HOST "192.168.0.15"
-#define PORT 3333
+#include <Adafruit_Sensor.h>
+#include <Adafruit_AHTX0.h>
+
+#define SSID "SSID"
+#define PASSWORD "PASSWORD"
+#define HOST "192.XXX.XXX.XXX"
+#define PORT 3000
 
 #define PIR_PIN 23
-#define TEMP_SENSOR_PIN 33
 
 #define LAMP1_PIN 4
 #define LAMP2_PIN 5
 #define LAMP3_PIN 18
 #define LAMP4_PIN 19
 
-#define FAN1_PIN 21
-#define FAN2_PIN 22
+#define FAN1_PIN 25
+#define FAN2_PIN 26
 
-#define GENERAL1_PIN 25
-#define GENERAL2_PIN 26
+#define GENERAL1_PIN 32
+#define GENERAL2_PIN 33
 
 WiFiMulti wifiMulti;
 HTTPClient http;
 
+Adafruit_AHTX0 aht20;
+
+sensors_event_t aht20TempEvt, aht20HumEvt;
+
 bool pirState = false;
-int temperatureRaw = 0;
+float temperature = 0;
+float humidity = 0;
 
 void setup() {
   Serial.begin(115200);
 
+  if (!aht20.begin()) {
+    Serial.println("Não foi possível encontrar um sensor AHT20, verifique as conexões!");
+    while (1);
+  }
+
   pinMode(PIR_PIN, INPUT);
-  pinMode(TEMP_SENSOR_PIN, INPUT);
 
   pinMode(LAMP1_PIN, OUTPUT);
   pinMode(LAMP2_PIN, OUTPUT);
@@ -56,18 +68,22 @@ bool digitalReadBool(int pin) {
 
 void readSensors() {
   pirState = digitalReadBool(PIR_PIN);
-  // temperatureRaw = analogRead(TEMP_SENSOR_PIN);
-  if (temperatureRaw > 4) {
-    temperatureRaw = 0;
-  } else {
-    temperatureRaw += 1;
+  aht20.getEvent(&aht20HumEvt, &aht20TempEvt);
+
+  if (isnan(aht20TempEvt.temperature) || isnan(aht20HumEvt.relative_humidity)) {
+    Serial.println("Falha na leitura do aht20!");
+    return;
   }
+
+  temperature = aht20TempEvt.temperature;
+  humidity = aht20HumEvt.relative_humidity;
 }
 
 void sendSensorData() {
   JsonDocument doc;
   doc["pir"] = pirState;
-  doc["temperature"] = temperatureRaw;
+  doc["temperature"] = temperature;
+  doc["humidity"] = humidity;
 
   Serial.print("[HTTP] POST /sensors body: ");
   serializeJsonPretty(doc, Serial);
@@ -136,7 +152,7 @@ void syncActuatorStates() {
       digitalWrite(GENERAL1_PIN, resDoc["general1"] ? HIGH : LOW);
       digitalWrite(GENERAL2_PIN, resDoc["general2"] ? HIGH : LOW);
     }
-  } else {           
+  } else {
     Serial.printf("[HTTP] POST /actuators/state error: %s\n", http.errorToString(httpCode).c_str());
   }
 
